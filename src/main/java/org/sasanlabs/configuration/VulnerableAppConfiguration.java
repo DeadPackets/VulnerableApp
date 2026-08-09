@@ -49,6 +49,7 @@ public class VulnerableAppConfiguration {
     private static final List<String> MAX_FILE_UPLOAD_SIZE_OVERRIDE_PATHS =
             Arrays.asList(
                     "/" + UnrestrictedFileUpload.CONTROLLER_PATH + "/" + LevelConstants.LEVEL_9);
+    private static final long MAX_FILE_UPLOAD_SIZE_IN_BYTES = 2L * 1024 * 1024;
 
     /**
      * Will Inject MessageBundle into messageSource bean.
@@ -186,9 +187,13 @@ public class VulnerableAppConfiguration {
     }
 
     /**
-     * Customized MultipartFilter bean disables default max upload size for multipart files and
-     * their overall requests, for select paths. See {@link
-     * UnrestrictedFileUpload#getVulnerablePayloadLevel10()} for usage.
+     * Customized MultipartFilter bean raising the max upload size for select paths.
+     *
+     * <p>Those paths used to be resolved with {@code setMaxUploadSize(-1)}, which removed the limit
+     * altogether. A check inside the handler cannot replace the ceiling: the resolver spools the
+     * whole request body before the handler is ever invoked, so the memory and disk are already
+     * spent by the time the handler could refuse it. The bound therefore sits where the buffering
+     * happens, and is still well above the size of the images these levels accept.
      */
     @Bean
     @Order(0)
@@ -198,8 +203,8 @@ public class VulnerableAppConfiguration {
             protected MultipartResolver lookupMultipartResolver(HttpServletRequest request) {
                 if (MAX_FILE_UPLOAD_SIZE_OVERRIDE_PATHS.contains(request.getServletPath())) {
                     CommonsMultipartResolver multipart = new CommonsMultipartResolver();
-                    multipart.setMaxUploadSize(-1);
-                    multipart.setMaxUploadSizePerFile(-1);
+                    multipart.setMaxUploadSize(MAX_FILE_UPLOAD_SIZE_IN_BYTES);
+                    multipart.setMaxUploadSizePerFile(MAX_FILE_UPLOAD_SIZE_IN_BYTES);
                     return multipart;
                 } else {
                     // returns default implementation
